@@ -1,0 +1,204 @@
+<html>
+<head>
+<title>Recognition with Bag of Words</title>
+<link href='http://fonts.googleapis.com/css?family=Nunito:300|Crimson+Text|Droid+Sans+Mono' rel='stylesheet' type='text/css'>
+<link rel="stylesheet" title="Default" href="styles/github.css">
+<script src="http://ajax.googleapis.com/ajax/libs/jquery/1.3.2/jquery.min.js"></script>  
+
+<link rel="stylesheet" href="highlighting/styles/default.css">
+<script src="highlighting/highlight.pack.js"></script>
+
+<style type="text/css">
+body {
+	margin: 0px;
+	width: 100%;
+	font-family: 'Crimson Text', serif;
+	font-size: 20px;
+	background: #fcfcfc;
+}
+h1 {
+	font-family: 'Nunito', sans-serif;
+	font-weight: normal;
+	font-size: 28px;
+	margin: 25px 0px 0px 0px;
+	text-transform: lowercase;
+
+}
+
+h2 {
+	font-family: 'Nunito', sans-serif;
+	font-weight: normal;
+	font-size: 32px;
+	margin: 15px 0px 35px 0px;
+	color: #333;	
+	word-spacing: 3px;
+}
+
+h3 {
+	font-family: 'Nunito', sans-serif;
+	font-weight: normal;
+	font-size: 26px;
+	margin: 10px 0px 10px 0px;
+	color: #333;
+	word-spacing: 2px;
+}
+h4 {
+	font-family: 'Nunito', sans-serif;
+	font-weight: normal;
+	font-size: 22px;
+	margin: 10px 0px 10px 0px;
+	color: #333;
+	word-spacing: 2px;
+}
+
+h5 {
+	font-family: 'Nunito', sans-serif;
+	font-weight: normal;
+	font-size: 18px;
+	margin: 10px 0px 10px 0px;
+	color: #111;
+	word-spacing: 2px;
+}
+
+p, li {
+	color: #444;
+}
+
+a {
+	color: #DE3737;
+}
+
+.container {
+	margin: 0px auto 0px auto;
+	width: 1160px;
+}
+
+#header {
+	background: #333;
+	width: 100%;
+}
+
+#headersub {
+	color: #ccc;
+	width: 960px;
+	margin: 0px auto 0px auto;
+	padding: 20px 0px 20px 0px;
+}
+
+.chart {
+	width: 480px;
+}
+.lol {
+	font-size: 16px;
+	color: #888;
+	font-style: italic;
+}
+.sep {
+	height: 1px;
+	width: 100%;
+	background: #999;
+	margin: 20px 0px 20px 0px;
+}
+.footer{
+	font-size: 16px;
+}
+.latex {
+	width: 100%;
+}
+
+.latex img {
+	display: block;
+	margin: 0px auto 0px auto;
+}
+
+pre {
+	font-family: 'Droid Sans Mono';
+	font-size: 14px;
+}
+
+table td {
+  text-align: center;
+  vertical-align: middle;
+}
+
+table td img {
+  text-align: center;
+  vertical-align: middle;
+}
+
+#contents a {
+}
+</style>
+<script type="text/javascript">
+    hljs.initHighlightingOnLoad();
+</script>
+</head>
+<body>
+<div id="header" >
+<div id="headersub">
+<h1>Aaron Andrews</h1>
+</div>
+</div>
+<div class="container">
+
+<h2>Project 4 / Scene Recognition with Bag of Words</h2>
+
+
+<p> The purpose of this assignment is to explore certain methods of scene recognition. Or more specifically, classifying images by mapping them to categories (e.g 'Bedroom' or 'Forest') based on ground truth training images already tied to said categories. The basic process for this is to featurize our test images and trainging images in some fashion, then for each test feature, find the closest training features and then choose the category for that training data as the classification for the image. The most basic methods I implemented for this are tiny images and k nearest neighbors classification, but I yielded better accuracy by using bags of local SIFT features and linear support vector machine classification. </p>
+
+
+<div style="clear:both">
+<h3>Tiny Images + k Nearest Neighbors</h3>
+
+<p> The tiny images method is rather simple, actually. All I do is take the image, shrink it to 16 x 16 (ignoring aspect ratio), and then flatten out to a 256 size vector, and BAM, thats our 'feature'.  </p>
+
+<h2>Tiny Images</h2>
+
+
+<pre><code>
+image_feats = [];
+for i = 1:size(image_paths, 1)
+    filename = image_paths(i);
+    filename = char(filename);
+    
+    B = imread(filename);
+    B = imresize(B, [16 16]);
+    
+    vector = reshape(B, 1, []);
+    vector = normr(vector);
+    image_feats = [image_feats; vector];
+    
+end
+
+</code></pre>
+
+<p> The end result result is an N x d matrix representing our image features, where N is the number of images, and d is simply the dimensionality of the image's feature, which, in this case, should be uniformly 256 for each image.</p>
+
+<p> After getting the feature matrices for both the training and test images using this method, we now handle classification of the test images using a simple k Nearest Neighbors algorithm. The reason we're doing kNN instead of simply finding the absolute closest match for each image feature is to dampen the influence of noise in our data, which can give us false positives and greatly lower our accuracy. Instead I looked at k of the closest matches, and within that list of test features, I took a vote for each category represented in the set, and the category with the most votes was chosen as the classification for each image. I found decent accuracies with k=20 features.</p>
+
+<p>With these two methods combined I got a mean accuracy of 21% for all 15 categories. You can see a breakdown of that <a href="tiny_kNN.html">here</a>,
+but, yeah, that's not all that great. To get this accuracy up, I realized that I would need something a bit more complicated for our features than just literal shrunk down images.</p>
+
+<div style="clear:both">
+<h3>Bag of Sifts + k Nearest Neighbors</h3>
+
+<p>A bag of sifts is basically a feature histogram that looks at the local SIFT features of each image, and puts them each in a bin representing the visual 'word' that describes them. This 'word' is a feature from a set of features known as a vocabulary. This vocabulary is formed by sampling a bunch of local SIFT features from the training image set. This process can take a real long time, so I made sure to save that vocab for future runs.</p>
+
+<p>The feature histogram, or bag of sifts, is then used as the feature vector for each image. Using this method with Nearest Neighbors classification, we found a mean accuracy of around 51.5% which is way better than tiny images. By building a visual vocabulary of 'words' from our training image set and then comparing the features of our test images to those words, we were able to be a lot more accurate. You can see a breakdown <a href="BagOfSifts_kNN.html">here</a> </p>
+
+<div style="clear:both">
+<h3>Bag of Sifts + Support Vector Machine</h3>
+
+<p>The thing with k Nearest Neighbors and our bag of sifts is that a lot of the words in our vocabulary can be rather uninformative, between our training images, there's bound to be a lot of identical 'words' like smooth patches and step edges between them. But the sheer frequency of these words can heavily influence our kNN algorithm. That's why, in the effort of increasing accuracy, I opted for using a Support Vector Machine to classify the images.</p>
+
+<p>The SVM is basically a learning model that we generate for each category in our category set. These models basically tell us wether something is a kitchen or not, or a forest or not by training each of these models on the training image set. We then evaluate these models with each test image, and choose the category with the most confidence as our category for the image.</p>
+
+<p>With this method we got a better accuracy of around 60% with the lambda=0.000003 for our svm training function. You can see more <a href="BagOfSifts_SVM.html">here</a></p>
+
+<div style="clear:both">
+<h3>Tiny Images + Support Vector Machine</h3>
+
+<a href="tiny_SVM.html">here</a>
+</div>
+</body>
+</html>
